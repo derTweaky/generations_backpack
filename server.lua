@@ -50,7 +50,10 @@ end
 local activeBackpackBonus = {}
 
 local function GetBackpackBonus(source)
-    return activeBackpackBonus[source] or 0
+    if not source then return 0 end
+    local numKey = tonumber(source)
+    local strKey = tostring(source)
+    return (numKey and activeBackpackBonus[numKey]) or (strKey and activeBackpackBonus[strKey]) or 0
 end
 exports('GetBackpackBonus', GetBackpackBonus)
 
@@ -190,7 +193,10 @@ local function ProcessBackpackUpdate(source)
         local extraWeight = tonumber(metadata.weight) or BACKPACK_DEFAULTS.weight
         local component = tonumber(metadata.component) or 5
 
-        activeBackpackBonus[source] = extraWeight
+        local numKey = tonumber(source)
+        local strKey = tostring(source)
+        if numKey then activeBackpackBonus[numKey] = extraWeight end
+        if strKey then activeBackpackBonus[strKey] = extraWeight end
 
         exports.ox_inventory:SetSlotCount(source, defaultSlots + extraSlots)
         
@@ -213,7 +219,11 @@ local function ProcessBackpackUpdate(source)
             femaleTexture = femaleTexture
         })
     else
-        activeBackpackBonus[source] = 0
+        local numKey = tonumber(source)
+        local strKey = tostring(source)
+        if numKey then activeBackpackBonus[numKey] = 0 end
+        if strKey then activeBackpackBonus[strKey] = 0 end
+
         exports.ox_inventory:SetSlotCount(source, defaultSlots)
         
         if GetResourceState('xnr-gym') ~= 'started' then
