@@ -180,6 +180,8 @@ local function ProcessBackpackUpdate(source)
     local item = exports.ox_inventory:GetSlot(source, 6)
     local isBackpack = item and item.name == 'clothing' and item.metadata and (item.metadata.isBackpack or item.metadata.component ~= nil)
 
+    print(string.format("^3[generations_backpack] ProcessBackpackUpdate for player %s. Item in Slot 6: %s (isBackpack: %s)^7", tostring(source), item and item.name or "none", tostring(isBackpack)))
+
     if isBackpack then
         local metadata = item.metadata or {}
 

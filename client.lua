@@ -16,6 +16,22 @@ local creatorCam = nil
 RegisterNetEvent('ox_inventory:setPlayerInventory', function()
     isInventoryReady = true
     TriggerServerEvent('generations_backpack:server:updateBackpack')
+    print("^2[generations_backpack] Event: Inventory is ready (setPlayerInventory triggered).^7")
+end)
+
+-- Check if inventory is already ready on startup (e.g. after resource restart)
+CreateThread(function()
+    Wait(1000)
+    if not isInventoryReady then
+        local success, items = pcall(function()
+            return exports.ox_inventory:GetPlayerItems()
+        end)
+        if success and items then
+            isInventoryReady = true
+            TriggerServerEvent('generations_backpack:server:updateBackpack')
+            print("^2[generations_backpack] Startup sync: Inventory found, setting ready.^7")
+        end
+    end
 end)
 
 local function removeVisualBackpack()
@@ -121,6 +137,7 @@ CreateThread(function()
                 end
 
                 if changed then
+                    print(string.format("^3[generations_backpack] Slot 6 changed! Name: %s, isBackpack: %s^7", tostring(backpackName), tostring(isBackpack)))
                     TriggerServerEvent('generations_backpack:server:updateBackpack')
                     lastBackpackName = backpackName
                     lastBackpackMetadata = metadata and lib.table.clone(metadata) or nil
