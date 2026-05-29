@@ -153,7 +153,7 @@ local function startCreatorCamera()
     -- Create camera looking at the back of the player
     creatorCam = CreateCam("DEFAULT_SCRIPTED_CAMERA", true)
     local camCoords = GetOffsetFromEntityInWorldCoords(ped, 0.0, -1.8, 0.4)
-    SetCamCoords(creatorCam, camCoords.x, camCoords.y, camCoords.z)
+    SetCamCoord(creatorCam, camCoords.x, camCoords.y, camCoords.z)
     PointCamAtEntity(creatorCam, ped, 0.0, 0.0, 0.2, true)
     SetCamActive(creatorCam, true)
     RenderScriptCams(true, true, 500, true, true)
