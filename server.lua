@@ -1,5 +1,3 @@
-local ESX = exports.es_extended:getSharedObject()
-
 -- Backpack Defaults Lookup
 local BACKPACK_DEFAULTS = {
     backpack = { slots = 10, weight = 15000, maleDrawable = 31, maleTexture = 0, femaleDrawable = 31, femaleTexture = 0 },
@@ -10,10 +8,21 @@ local BACKPACK_DEFAULTS = {
 }
 
 local function IsAdmin(source)
-    local xPlayer = ESX.GetPlayerFromId(source)
-    if not xPlayer then return false end
-    local group = xPlayer.getGroup()
-    return group == 'admin' or group == 'superadmin'
+    if GetResourceState('qbx_core') == 'started' then
+        return exports.qbx_core:HasPermission(source, 'admin') or exports.qbx_core:HasPermission(source, 'god')
+    end
+    
+    -- Fallback for ESX
+    if GetResourceState('es_extended') == 'started' then
+        local ESX = exports.es_extended:getSharedObject()
+        local xPlayer = ESX.GetPlayerFromId(source)
+        if xPlayer then
+            local group = xPlayer.getGroup()
+            return group == 'admin' or group == 'superadmin'
+        end
+    end
+    
+    return false
 end
 
 -- Helper to update player inventory limits based on slot 6 content
