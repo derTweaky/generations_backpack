@@ -1,7 +1,7 @@
 fx_version 'cerulean'
 game 'gta5'
 
-author 'Antigravity'
+author 'derTweaky'
 description 'Metadata-based Backpack System with Slot 6 expansion and illenium-appearance support'
 version '1.0.0'
 
