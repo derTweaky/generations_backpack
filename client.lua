@@ -356,7 +356,7 @@ showCreatorMenu = function(data)
         {
             title = "Name / Label: " .. data.label,
             description = "Klicken zum Ändern",
-            icon = "tag",
+            icon = "fas fa-tag",
             onSelect = function()
                 local input = lib.inputDialog("Rucksack Name", {
                     { type = "input", label = "Custom Name / Label", default = data.label, required = true }
@@ -370,7 +370,7 @@ showCreatorMenu = function(data)
         {
             title = "Ziel-Komponente: " .. data.component,
             description = "Toggles: 5 (Tasche), 7 (Accessoire), 8 (Unterhemd)",
-            icon = "shirt",
+            icon = "fas fa-shirt",
             onSelect = function()
                 local select = lib.inputDialog("Komponente Auswählen", {
                     {
@@ -394,7 +394,7 @@ showCreatorMenu = function(data)
         {
             title = "Zusätzliche Slots: " .. data.slots,
             description = "Klicken zum Ändern",
-            icon = "cubes",
+            icon = "fas fa-cubes",
             onSelect = function()
                 local input = lib.inputDialog("Slots Anzahl", {
                     { type = "number", label = "Slots", default = data.slots, min = 1, max = 100, required = true }
@@ -408,7 +408,7 @@ showCreatorMenu = function(data)
         {
             title = "Zusätzliche Traglast: " .. data.weight .. " kg",
             description = "Klicken zum Ändern",
-            icon = "weight-hanging",
+            icon = "fas fa-weight-hanging",
             onSelect = function()
                 local input = lib.inputDialog("Traglast", {
                     { type = "number", label = "Gewicht in kg", default = data.weight, min = 1, max = 500, required = true }
@@ -422,7 +422,7 @@ showCreatorMenu = function(data)
         {
             title = "Männliches Modell durchsuchen",
             description = string.format("Aktuell - Drawable: %d | Textur: %d (A/D & W/S)", data.maleDrawable, data.maleTexture),
-            icon = "mars",
+            icon = "fas fa-mars",
             onSelect = function()
                 startBrowsingMode(data, 'male')
             end
@@ -430,7 +430,7 @@ showCreatorMenu = function(data)
         {
             title = "Weibliches Modell durchsuchen",
             description = string.format("Aktuell - Drawable: %d | Textur: %d (A/D & W/S)", data.femaleDrawable, data.femaleTexture),
-            icon = "venus",
+            icon = "fas fa-venus",
             onSelect = function()
                 startBrowsingMode(data, 'female')
             end
@@ -441,7 +441,7 @@ showCreatorMenu = function(data)
         table.insert(options, {
             title = "In Slot 6 Speichern & Anwenden",
             description = "Übernimmt Änderungen für den aktiven Rucksack in Slot 6",
-            icon = "check-double",
+            icon = "fas fa-check-double",
             onSelect = function()
                 isCreatorActive = false
                 stopCreatorCamera()
@@ -453,7 +453,7 @@ showCreatorMenu = function(data)
         table.insert(options, {
             title = "Rucksack erstellen (Gibt Item)",
             description = "Erstellt den Rucksack und gibt ihn dir",
-            icon = "plus",
+            icon = "fas fa-plus",
             onSelect = function()
                 isCreatorActive = false
                 stopCreatorCamera()
@@ -466,7 +466,7 @@ showCreatorMenu = function(data)
     table.insert(options, {
         title = "Als Preset speichern",
         description = "Speichert diesen Rucksack als Preset zum späteren Generieren",
-        icon = "save",
+        icon = "fas fa-save",
         onSelect = function()
             TriggerServerEvent('generations_backpack:server:savePreset', {
                 id = data.id,
@@ -486,7 +486,7 @@ showCreatorMenu = function(data)
     table.insert(options, {
         title = "Abbrechen",
         description = "Schließt das Menü und setzt Kleidung zurück",
-        icon = "times",
+        icon = "fas fa-xmark",
         onSelect = function()
             isCreatorActive = false
             stopCreatorCamera()
@@ -550,14 +550,14 @@ RegisterNetEvent('generations_backpack:client:openPresetManager', function()
                             options = {
                                 {
                                     title = "Rucksack nehmen (In Inventar legen)",
-                                    icon = "hand-holding",
+                                    icon = "fas fa-hand-holding",
                                     onSelect = function()
                                         TriggerServerEvent('generations_backpack:server:givePreset', preset)
                                     end
                                 },
                                 {
                                     title = "Rucksack bearbeiten (Im Live-Editor)",
-                                    icon = "edit",
+                                    icon = "fas fa-edit",
                                     onSelect = function()
                                         isCreatorActive = true
                                         saveOriginalClothes()
@@ -578,7 +578,7 @@ RegisterNetEvent('generations_backpack:client:openPresetManager', function()
                                 },
                                 {
                                     title = "Rucksack löschen",
-                                    icon = "trash",
+                                    icon = "fas fa-trash",
                                     onSelect = function()
                                         local confirm = lib.alertDialog({
                                             header = 'Preset löschen?',
