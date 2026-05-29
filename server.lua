@@ -25,6 +25,13 @@ local function IsAdmin(source)
     return false
 end
 
+local activeBackpackBonus = {}
+
+local function GetBackpackBonus(source)
+    return activeBackpackBonus[source] or 0
+end
+exports('GetBackpackBonus', GetBackpackBonus)
+
 -- Helper to update player inventory limits based on slot 6 content
 local function ProcessBackpackUpdate(source)
     local defaultSlots = GetConvarInt('inventory:slots', 50)
@@ -41,8 +48,14 @@ local function ProcessBackpackUpdate(source)
         local extraSlots = tonumber(metadata.slots) or defaults.slots
         local extraWeight = tonumber(metadata.weight) or defaults.weight
 
+        activeBackpackBonus[source] = extraWeight
+
         exports.ox_inventory:SetSlotCount(source, defaultSlots + extraSlots)
-        exports.ox_inventory:SetMaxWeight(source, defaultWeight + extraWeight)
+        
+        -- If xnr-gym is started, we let it handle the max weight update.
+        if GetResourceState('xnr-gym') ~= 'started' then
+            exports.ox_inventory:SetMaxWeight(source, defaultWeight + extraWeight)
+        end
 
         -- Determine drawable and texture for client syncing
         local maleDrawable = tonumber(metadata.maleDrawable) or defaults.maleDrawable
@@ -57,8 +70,13 @@ local function ProcessBackpackUpdate(source)
             femaleTexture = femaleTexture
         })
     else
+        activeBackpackBonus[source] = 0
         exports.ox_inventory:SetSlotCount(source, defaultSlots)
-        exports.ox_inventory:SetMaxWeight(source, defaultWeight)
+        
+        if GetResourceState('xnr-gym') ~= 'started' then
+            exports.ox_inventory:SetMaxWeight(source, defaultWeight)
+        end
+        
         TriggerClientEvent('generations_backpack:client:syncVisualBackpack', source, false)
     end
 end

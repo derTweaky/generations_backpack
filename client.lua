@@ -61,6 +61,10 @@ RegisterNetEvent('generations_backpack:client:syncVisualBackpack', function(equi
     else
         removeVisualBackpack()
     end
+
+    if GetResourceState('xnr-gym') == 'started' then
+        TriggerServerEvent('xnr-gym/server/UpdatePlayerMaxWeight')
+    end
 end)
 
 -- Main Monitoring Thread
