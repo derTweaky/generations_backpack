@@ -164,7 +164,7 @@ RegisterNetEvent('generations_backpack:server:editConfirm', function(data)
     ProcessBackpackUpdate(src)
 end)
 
--- Hook to prevent unequipping/moving backpack out of slot 6 when items are in expanded slots (>50)
+-- Hook to prevent unequipping/moving backpack out of slot 6 when items are in expanded slots (>24)
 exports.ox_inventory:registerHook('swapItems', function(payload)
     if payload.fromInventory == payload.source and payload.fromSlot.slot == 6 then
         local isBackpack = BACKPACK_DEFAULTS[payload.fromSlot.name] ~= nil
@@ -172,7 +172,7 @@ exports.ox_inventory:registerHook('swapItems', function(payload)
             local inv = exports.ox_inventory:GetInventory(payload.source)
             if inv and inv.items then
                 for slotId, slotData in pairs(inv.items) do
-                    if slotId > 50 and slotData and slotData.count > 0 then
+                    if slotId > 24 and slotData and slotData.count > 0 then
                         TriggerClientEvent('ox_lib:notify', payload.source, {
                             type = 'error',
                             description = 'Du kannst den Rucksack nicht ablegen/bewegen, solange noch Gegenstände in den erweiterten Slots sind!'
