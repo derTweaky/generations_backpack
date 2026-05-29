@@ -360,9 +360,13 @@ RegisterNetEvent('generations_backpack:server:editConfirm', function(data)
     ProcessBackpackUpdate(src)
 end)
 
--- Hook to prevent unequipping/moving backpack out of slot 6 when items are in expanded slots (>25)
+-- Hook to manage Slot 6 swaps: blocks unequipping if items are in expanded slots, and triggers ProcessBackpackUpdate
 exports.ox_inventory:registerHook('swapItems', function(payload)
-    if payload.fromInventory == payload.source and payload.fromSlot.slot == 6 then
+    local fromSlotId = payload.fromSlot and payload.fromSlot.slot
+    local toSlotId = type(payload.toSlot) == 'table' and payload.toSlot.slot or payload.toSlot
+
+    -- 1. Prevent unequipping/moving backpack out of slot 6 when items are in expanded slots (>25)
+    if payload.fromInventory == payload.source and fromSlotId == 6 then
         local isBackpack = payload.fromSlot.name == 'clothing' and payload.fromSlot.metadata and (payload.fromSlot.metadata.isBackpack or payload.fromSlot.metadata.component ~= nil)
         if isBackpack then
             local inv = exports.ox_inventory:GetInventory(payload.source)
@@ -378,5 +382,14 @@ exports.ox_inventory:registerHook('swapItems', function(payload)
                 end
             end
         end
+    end
+
+    -- 2. Trigger ProcessBackpackUpdate when any item is swapped in/out of player's slot 6
+    if (payload.fromInventory == payload.source and fromSlotId == 6) or
+       (payload.toInventory == payload.source and toSlotId == 6) then
+        CreateThread(function()
+            Wait(250) -- Wait briefly for the inventory state to be updated
+            ProcessBackpackUpdate(payload.source)
+        end)
     end
 end)
