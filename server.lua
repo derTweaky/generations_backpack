@@ -1,54 +1,7 @@
 local BACKPACK_DEFAULTS = { slots = 10, weight = 15000, maleDrawable = 31, maleTexture = 0, femaleDrawable = 31, femaleTexture = 0 }
-
-local function IsAdmin(source)
-    -- Check Qbox
-    if GetResourceState('qbx_core') == 'started' then
-        local success, result = pcall(function()
-            return exports.qbx_core:HasPermission(source, 'admin') or exports.qbx_core:HasPermission(source, 'god')
-        end)
-        if success then return result end
-    end
-
-    -- Check QBCore
-    if GetResourceState('qb-core') == 'started' then
-        local success, QBCore = pcall(function()
-            return exports['qb-core']:GetCoreObject()
-        end)
-        if success and QBCore then
-            local Player = QBCore.Functions.GetPlayer(source)
-            if Player then
-                local isAdm = QBCore.Functions.HasPermission(source, 'admin') or QBCore.Functions.HasPermission(source, 'god')
-                if isAdm or Player.PlayerData.group == 'admin' or Player.PlayerData.group == 'god' then
-                    return true
-                end
-            end
-        end
-    end
-    
-    -- Check ESX
-    if GetResourceState('es_extended') == 'started' then
-        local success, ESX = pcall(function()
-            return exports.es_extended:getSharedObject()
-        end)
-        if success and ESX then
-            local xPlayer = ESX.GetPlayerFromId(source)
-            if xPlayer then
-                local group = xPlayer.getGroup()
-                return group == 'admin' or group == 'superadmin'
-            end
-        end
-    end
-    
-    -- Fallback for Ace Permissions
-    if IsPlayerAceAllowed(source, "command") or IsPlayerAceAllowed(source, "admin") then
-        return true
-    end
-    
-    return false
-end
-
 local activeBackpackBonus = {}
 
+-- Export to get backpack bonus (weight in grams)
 local function GetBackpackBonus(source)
     if not source then return 0 end
     local numKey = tonumber(source)
@@ -57,147 +10,69 @@ local function GetBackpackBonus(source)
 end
 exports('GetBackpackBonus', GetBackpackBonus)
 
--- Helper to load presets from backpacks.json
-local function LoadPresets()
-    local fileContent = LoadResourceFile(GetCurrentResourceName(), "backpacks.json")
-    if not fileContent then
-        return {}
-    end
-    local ok, parsed = pcall(json.decode, fileContent)
-    return ok and parsed or {}
-end
-
--- Helper to save presets to backpacks.json
-local function SavePresets(presets)
-    SaveResourceFile(GetCurrentResourceName(), "backpacks.json", json.encode(presets, { indent = true }), -1)
-end
-
--- Export for lation_shops to get backpack metadata by preset ID or label
-local function GetBackpackMetadata(presetIdOrLabel)
-    local presets = LoadPresets()
-    for _, preset in ipairs(presets) do
-        if preset.id == presetIdOrLabel or preset.label == presetIdOrLabel or tostring(preset.id) == tostring(presetIdOrLabel) then
-            return {
-                isBackpack = true,
-                label = preset.label,
-                component = tonumber(preset.component) or 5,
-                slots = tonumber(preset.slots) or 10,
-                weight = (tonumber(preset.weight) or 15) * 1000,
-                maleDrawable = tonumber(preset.maleDrawable) or 31,
-                maleTexture = tonumber(preset.maleTexture) or 0,
-                femaleDrawable = tonumber(preset.femaleDrawable) or 31,
-                femaleTexture = tonumber(preset.femaleTexture) or 0,
-                drawable = tonumber(preset.maleDrawable) or 31,
-                texture = tonumber(preset.maleTexture) or 0,
-                description = ('Rucksack: %s (Slots: %d, Traglast: %dkg, Komponente: %d)'):format(
-                    preset.label, preset.slots, preset.weight, preset.component or 5
-                )
-            }
-        end
-    end
-    return nil
+-- Export for external scripts (like shops) to retrieve backpack stats from config
+local function GetBackpackMetadata(itemName)
+    if not Config.Backpacks or not Config.Backpacks[itemName] then return nil end
+    local bpConfig = Config.Backpacks[itemName]
+    
+    return {
+        isBackpack = true,
+        label = bpConfig.label,
+        component = tonumber(bpConfig.component) or 5,
+        slots = tonumber(bpConfig.slots) or 10,
+        weight = tonumber(bpConfig.weight) or 15000,
+        maleDrawable = bpConfig.male and tonumber(bpConfig.male.drawable) or 31,
+        maleTexture = bpConfig.male and tonumber(bpConfig.male.texture) or 0,
+        femaleDrawable = bpConfig.female and tonumber(bpConfig.female.drawable) or 31,
+        femaleTexture = bpConfig.female and tonumber(bpConfig.female.texture) or 0,
+        drawable = bpConfig.male and tonumber(bpConfig.male.drawable) or 31,
+        texture = bpConfig.male and tonumber(bpConfig.male.texture) or 0,
+        image = bpConfig.image,
+        description = ('Rucksack: %s (Slots: %d, Traglast: %dkg)'):format(
+            bpConfig.label, bpConfig.slots, bpConfig.weight / 1000
+        )
+    }
 end
 exports('GetBackpackMetadata', GetBackpackMetadata)
 
--- Ox lib callback for retrieving presets
-lib.callback.register('generations_backpack:server:getPresets', function(source)
-    if not IsAdmin(source) then return {} end
-    return LoadPresets()
-end)
-
--- Event to save a preset
-RegisterNetEvent('generations_backpack:server:savePreset', function(presetData)
-    local src = source
-    if not IsAdmin(src) then return end
-
-    local presets = LoadPresets()
-    if not presetData.id then
-        presetData.id = os.time() .. "_" .. math.random(1000, 9999)
-    end
-
-    local found = false
-    for i, preset in ipairs(presets) do
-        if preset.id == presetData.id then
-            presets[i] = presetData
-            found = true
-            break
-        end
-    end
-
-    if not found then
-        table.insert(presets, presetData)
-    end
-
-    SavePresets(presets)
-    TriggerClientEvent('ox_lib:notify', src, { type = 'success', description = 'Preset erfolgreich gespeichert!' })
-end)
-
--- Event to delete a preset
-RegisterNetEvent('generations_backpack:server:deletePreset', function(presetId)
-    local src = source
-    if not IsAdmin(src) then return end
-
-    local presets = LoadPresets()
-    local newPresets = {}
-    for _, preset in ipairs(presets) do
-        if preset.id ~= presetId then
-            table.insert(newPresets, preset)
-        end
-    end
-
-    SavePresets(newPresets)
-    TriggerClientEvent('ox_lib:notify', src, { type = 'success', description = 'Preset erfolgreich gelöscht!' })
-end)
-
--- Event to give a preset to admin
-RegisterNetEvent('generations_backpack:server:givePreset', function(presetData)
-    local src = source
-    if not IsAdmin(src) then return end
-
-    local metadata = {
-        isBackpack = true,
-        label = presetData.label,
-        component = tonumber(presetData.component) or 5,
-        slots = tonumber(presetData.slots) or 10,
-        weight = (tonumber(presetData.weight) or 15) * 1000,
-        maleDrawable = tonumber(presetData.maleDrawable) or 31,
-        maleTexture = tonumber(presetData.maleTexture) or 0,
-        femaleDrawable = tonumber(presetData.femaleDrawable) or 31,
-        femaleTexture = tonumber(presetData.femaleTexture) or 0,
-        drawable = tonumber(presetData.maleDrawable) or 31,
-        texture = tonumber(presetData.maleTexture) or 0,
-        description = ('Rucksack: %s (Slots: %d, Traglast: %dkg, Komponente: %d)'):format(
-            presetData.label, presetData.slots, presetData.weight, presetData.component or 5
-        )
-    }
-
-    exports.ox_inventory:AddItem(src, 'clothing', 1, metadata)
-    TriggerClientEvent('ox_lib:notify', src, { type = 'success', description = 'Rucksack erfolgreich ins Inventar gelegt!' })
-end)
-
--- Helper to update player inventory limits based on slot 6 content
+-- Core logic to update slot count and maximum weight, and migrate stash items to player slots
 local function ProcessBackpackUpdate(source)
-    local defaultSlots = GetConvarInt('inventory:slots', 50)
+    local defaultSlots = GetConvarInt('inventory:slots', 25)
     local defaultWeight = GetConvarInt('inventory:weight', 30000)
 
-    local item = exports.ox_inventory:GetSlot(source, 6)
-    local isBackpack = item and item.name == 'clothing' and item.metadata and (item.metadata.isBackpack or item.metadata.component ~= nil)
+    local item = exports.ox_inventory:GetSlot(source, 25)
+    local bpConfig = item and Config.Backpacks[item.name]
 
-    print(string.format("^3[generations_backpack] ProcessBackpackUpdate for player %s. Item in Slot 6: %s (isBackpack: %s)^7", tostring(source), item and item.name or "none", tostring(isBackpack)))
+    print(string.format("^3[generations_backpack] ProcessBackpackUpdate for player %s. Item in Slot 25: %s (isBackpack: %s)^7", tostring(source), item and item.name or "none", tostring(bpConfig ~= nil)))
 
-    if isBackpack then
+    if bpConfig then
         local metadata = item.metadata or {}
+        local backpackId = metadata.backpackId
 
-        -- Read metadata values or fall back to defaults
-        local extraSlots = tonumber(metadata.slots) or BACKPACK_DEFAULTS.slots
-        local extraWeight = tonumber(metadata.weight) or BACKPACK_DEFAULTS.weight
-        local component = tonumber(metadata.component) or 5
+        -- Generate unique backpackId if not already present on the item
+        if not backpackId then
+            backpackId = "bp_" .. os.time() .. "_" .. math.random(1000, 9999)
+            metadata.backpackId = backpackId
+            metadata.description = ('Rucksack: %s (Slots: %d, Traglast: %dkg)'):format(
+                bpConfig.label, bpConfig.slots, bpConfig.weight / 1000
+            )
+            exports.ox_inventory:SetMetadata(source, 25, metadata)
+            return -- Exit: SetMetadata will trigger a new ProcessBackpackUpdate shortly
+        end
+
+        local extraSlots = tonumber(bpConfig.slots) or BACKPACK_DEFAULTS.slots
+        local extraWeight = tonumber(bpConfig.weight) or BACKPACK_DEFAULTS.weight
+        local component = tonumber(bpConfig.component) or 5
 
         local numKey = tonumber(source)
         local strKey = tostring(source)
         if numKey then activeBackpackBonus[numKey] = extraWeight end
         if strKey then activeBackpackBonus[strKey] = extraWeight end
 
+        -- 1. Register stash in ox_inventory (so we can interact with it)
+        exports.ox_inventory:RegisterStash(backpackId, bpConfig.label, extraSlots, extraWeight, false)
+
+        -- 2. Expand player slots
         exports.ox_inventory:SetSlotCount(source, defaultSlots + extraSlots)
         
         -- If xnr-gym is started, we let it handle the max weight update.
@@ -205,11 +80,25 @@ local function ProcessBackpackUpdate(source)
             exports.ox_inventory:SetMaxWeight(source, defaultWeight + extraWeight)
         end
 
-        -- Determine drawable and texture for client syncing
-        local maleDrawable = tonumber(metadata.maleDrawable) or tonumber(metadata.drawable) or BACKPACK_DEFAULTS.maleDrawable
-        local maleTexture = tonumber(metadata.maleTexture) or tonumber(metadata.texture) or BACKPACK_DEFAULTS.maleTexture
-        local femaleDrawable = tonumber(metadata.femaleDrawable) or tonumber(metadata.drawable) or BACKPACK_DEFAULTS.femaleDrawable
-        local femaleTexture = tonumber(metadata.femaleTexture) or tonumber(metadata.texture) or BACKPACK_DEFAULTS.femaleTexture
+        -- 3. Load items from stash into player slots 26+
+        local stashInv = exports.ox_inventory:GetInventory(backpackId)
+        if stashInv and stashInv.items then
+            for slotId, slotData in pairs(stashInv.items) do
+                local playerSlot = slotId + 25
+                -- Verify target slot is empty to avoid duplicating/overwriting items
+                local currentSlotData = exports.ox_inventory:GetSlot(source, playerSlot)
+                if not currentSlotData or currentSlotData.count == 0 then
+                    exports.ox_inventory:AddItem(source, slotData.name, slotData.count, slotData.metadata, playerSlot)
+                    exports.ox_inventory:RemoveItem(backpackId, slotData.name, slotData.count, nil, slotId)
+                end
+            end
+        end
+
+        -- Retrieve drawable and texture details directly from Config.Backpacks
+        local maleDrawable = bpConfig.male and tonumber(bpConfig.male.drawable) or BACKPACK_DEFAULTS.maleDrawable
+        local maleTexture = bpConfig.male and tonumber(bpConfig.male.texture) or BACKPACK_DEFAULTS.maleTexture
+        local femaleDrawable = bpConfig.female and tonumber(bpConfig.female.drawable) or BACKPACK_DEFAULTS.femaleDrawable
+        local femaleTexture = bpConfig.female and tonumber(bpConfig.female.texture) or BACKPACK_DEFAULTS.femaleTexture
 
         TriggerClientEvent('generations_backpack:client:syncVisualBackpack', source, true, {
             component = component,
@@ -234,171 +123,65 @@ local function ProcessBackpackUpdate(source)
     end
 end
 
--- Client triggers this when slot 6 changes
+-- Hook when player inventory is requested to update
 RegisterNetEvent('generations_backpack:server:updateBackpack', function()
     local src = source
     ProcessBackpackUpdate(src)
 end)
 
--- Admin command /createbackpack
-RegisterCommand('createbackpack', function(source, args)
-    print("^3[generations_backpack] /createbackpack command run by source: " .. tostring(source) .. "^7")
-    if source == 0 then return end
-    local isAdmin = IsAdmin(source)
-    print("^3[generations_backpack] IsAdmin result: " .. tostring(isAdmin) .. "^7")
-    if not isAdmin then
-        TriggerClientEvent('ox_lib:notify', source, { type = 'error', description = 'Dazu hast du keine Rechte.' })
-        return
-    end
-    print("^2[generations_backpack] Triggering client event generations_backpack:client:openCreator^7")
-    TriggerClientEvent('generations_backpack:client:openCreator', source)
-end, false)
-
--- Admin command /managebackpacks
-RegisterCommand('managebackpacks', function(source, args)
-    print("^3[generations_backpack] /managebackpacks command run by source: " .. tostring(source) .. "^7")
-    if source == 0 then return end
-    local isAdmin = IsAdmin(source)
-    print("^3[generations_backpack] IsAdmin result: " .. tostring(isAdmin) .. "^7")
-    if not isAdmin then
-        TriggerClientEvent('ox_lib:notify', source, { type = 'error', description = 'Dazu hast du keine Rechte.' })
-        return
-    end
-    print("^2[generations_backpack] Triggering client event generations_backpack:client:openPresetManager^7")
-    TriggerClientEvent('generations_backpack:client:openPresetManager', source)
-end, false)
-
--- Admin command /editbackpack
-RegisterCommand('editbackpack', function(source, args)
-    print("^3[generations_backpack] /editbackpack command run by source: " .. tostring(source) .. "^7")
-    if source == 0 then return end
-    local isAdmin = IsAdmin(source)
-    print("^3[generations_backpack] IsAdmin result: " .. tostring(isAdmin) .. "^7")
-    if not isAdmin then
-        TriggerClientEvent('ox_lib:notify', source, { type = 'error', description = 'Dazu hast du keine Rechte.' })
-        return
-    end
-
-    local item = exports.ox_inventory:GetSlot(source, 6)
-    if not item or item.name ~= 'clothing' or not item.metadata or (not item.metadata.isBackpack and item.metadata.component == nil) then
-        TriggerClientEvent('ox_lib:notify', source, { type = 'error', description = 'Du musst einen Rucksack (Kleidung) in Slot 6 haben, um ihn zu bearbeiten.' })
-        return
-    end
-
-    local metadata = item.metadata or {}
-
-    local slots = tonumber(metadata.slots) or BACKPACK_DEFAULTS.slots
-    local weightKg = (tonumber(metadata.weight) or BACKPACK_DEFAULTS.weight) / 1000
-    local component = tonumber(metadata.component) or 5
-    local maleDrawable = tonumber(metadata.maleDrawable) or tonumber(metadata.drawable) or BACKPACK_DEFAULTS.maleDrawable
-    local maleTexture = tonumber(metadata.maleTexture) or tonumber(metadata.texture) or BACKPACK_DEFAULTS.maleTexture
-    local femaleDrawable = tonumber(metadata.femaleDrawable) or tonumber(metadata.drawable) or BACKPACK_DEFAULTS.femaleDrawable
-    local femaleTexture = tonumber(metadata.femaleTexture) or tonumber(metadata.texture) or BACKPACK_DEFAULTS.femaleTexture
-    local label = metadata.label or item.label
-
-    print("^2[generations_backpack] Triggering client event generations_backpack:client:openCreator (edit)^7")
-    TriggerClientEvent('generations_backpack:client:openCreator', source, {
-        isEdit = true,
-        label = label,
-        slots = slots,
-        weight = weightKg,
-        component = component,
-        maleDrawable = maleDrawable,
-        maleTexture = maleTexture,
-        femaleDrawable = femaleDrawable,
-        femaleTexture = femaleTexture
-    })
-end, false)
-
--- Server Callback to finalize creation/updating from creator
-RegisterNetEvent('generations_backpack:server:createConfirm', function(data)
-    local src = source
-    if not IsAdmin(src) then return end
-
-    if not data then return end
-
-    local metadata = {
-        isBackpack = true,
-        label = data.label,
-        component = tonumber(data.component) or 5,
-        slots = tonumber(data.slots) or BACKPACK_DEFAULTS.slots,
-        weight = (tonumber(data.weight) or (BACKPACK_DEFAULTS.weight / 1000)) * 1000, -- convert kg to grams
-        maleDrawable = tonumber(data.maleDrawable) or BACKPACK_DEFAULTS.maleDrawable,
-        maleTexture = tonumber(data.maleTexture) or BACKPACK_DEFAULTS.maleTexture,
-        femaleDrawable = tonumber(data.femaleDrawable) or BACKPACK_DEFAULTS.femaleDrawable,
-        femaleTexture = tonumber(data.femaleTexture) or BACKPACK_DEFAULTS.femaleTexture,
-        drawable = tonumber(data.maleDrawable) or BACKPACK_DEFAULTS.maleDrawable,
-        texture = tonumber(data.maleTexture) or BACKPACK_DEFAULTS.maleTexture,
-        description = ('Rucksack: %s (Slots: %d, Traglast: %dkg, Komponente: %d)'):format(
-            data.label, data.slots, data.weight, data.component or 5
-        )
-    }
-
-    exports.ox_inventory:AddItem(src, 'clothing', 1, metadata)
-    TriggerClientEvent('ox_lib:notify', src, { type = 'success', description = 'Rucksack erfolgreich erstellt!' })
-end)
-
--- Server Callback to finalize editing active slot 6 backpack
-RegisterNetEvent('generations_backpack:server:editConfirm', function(data)
-    local src = source
-    if not IsAdmin(src) then return end
-
-    local item = exports.ox_inventory:GetSlot(src, 6)
-    if not item or item.name ~= 'clothing' or not item.metadata or (not item.metadata.isBackpack and item.metadata.component == nil) then return end
-
-    local newMetadata = {
-        isBackpack = true,
-        label = data.label,
-        component = tonumber(data.component) or 5,
-        slots = tonumber(data.slots) or BACKPACK_DEFAULTS.slots,
-        weight = (tonumber(data.weight) or (BACKPACK_DEFAULTS.weight / 1000)) * 1000, -- convert kg to grams
-        maleDrawable = tonumber(data.maleDrawable) or BACKPACK_DEFAULTS.maleDrawable,
-        maleTexture = tonumber(data.maleTexture) or BACKPACK_DEFAULTS.maleTexture,
-        femaleDrawable = tonumber(data.femaleDrawable) or BACKPACK_DEFAULTS.femaleDrawable,
-        femaleTexture = tonumber(data.femaleTexture) or BACKPACK_DEFAULTS.femaleTexture,
-        drawable = tonumber(data.maleDrawable) or BACKPACK_DEFAULTS.maleDrawable,
-        texture = tonumber(data.maleTexture) or BACKPACK_DEFAULTS.maleTexture,
-        description = ('Rucksack: %s (Slots: %d, Traglast: %dkg, Komponente: %d)'):format(
-            data.label, data.slots, data.weight, data.component or 5
-        )
-    }
-
-    exports.ox_inventory:SetMetadata(src, 6, newMetadata)
-    TriggerClientEvent('ox_lib:notify', src, { type = 'success', description = 'Rucksack erfolgreich in Slot 6 aktualisiert!' })
-    
-    -- Force slot 6 update/sync
-    ProcessBackpackUpdate(src)
-end)
-
--- Hook to manage Slot 6 swaps: blocks unequipping if items are in expanded slots, and triggers ProcessBackpackUpdate
+-- Hook to manage Slot 25 swaps: migrates items between player expanded slots and unique backpack stash
 exports.ox_inventory:registerHook('swapItems', function(payload)
     local fromSlotId = payload.fromSlot and payload.fromSlot.slot
     local toSlotId = type(payload.toSlot) == 'table' and payload.toSlot.slot or payload.toSlot
 
-    -- 1. Prevent unequipping/moving backpack out of slot 6 when items are in expanded slots (>25)
-    if payload.fromInventory == payload.source and fromSlotId == 6 then
-        local isBackpack = payload.fromSlot.name == 'clothing' and payload.fromSlot.metadata and (payload.fromSlot.metadata.isBackpack or payload.fromSlot.metadata.component ~= nil)
-        if isBackpack then
-            local inv = exports.ox_inventory:GetInventory(payload.source)
-            if inv and inv.items then
-                for slotId, slotData in pairs(inv.items) do
-                    if slotId > 25 and slotData and slotData.count > 0 then
-                        TriggerClientEvent('ox_lib:notify', payload.source, {
-                            type = 'error',
-                            description = 'Du kannst den Rucksack nicht ablegen/bewegen, solange noch Gegenstände in den erweiterten Slots sind!'
-                        })
-                        return false
+    -- 1. Unequipping a backpack from slot 25
+    if payload.fromInventory == payload.source and fromSlotId == 25 then
+        local bpConfig = Config.Backpacks[payload.fromSlot.name]
+        if bpConfig then
+            local metadata = payload.fromSlot.metadata or {}
+            local backpackId = metadata.backpackId
+            
+            -- Migrate items from player slots 26+ to stash slots 1+
+            if backpackId then
+                local extraSlots = tonumber(bpConfig.slots) or 10
+                local extraWeight = tonumber(bpConfig.weight) or 15000
+
+                -- Register stash to ensure it exists in ox_inventory
+                exports.ox_inventory:RegisterStash(backpackId, bpConfig.label, extraSlots, extraWeight, false)
+
+                -- Loop through the player's expanded slots and move items to the stash
+                for i = 1, extraSlots do
+                    local playerSlotId = 25 + i
+                    local slotData = exports.ox_inventory:GetSlot(payload.source, playerSlotId)
+                    if slotData and slotData.count > 0 then
+                        exports.ox_inventory:AddItem(backpackId, slotData.name, slotData.count, slotData.metadata, i)
+                        exports.ox_inventory:RemoveItem(payload.source, slotData.name, slotData.count, nil, playerSlotId)
                     end
                 end
             end
+
+            -- Set player slot count and weight limits back to default
+            local defaultSlots = GetConvarInt('inventory:slots', 25)
+            local defaultWeight = GetConvarInt('inventory:weight', 30000)
+            
+            exports.ox_inventory:SetSlotCount(payload.source, defaultSlots)
+            if GetResourceState('xnr-gym') ~= 'started' then
+                exports.ox_inventory:SetMaxWeight(payload.source, defaultWeight)
+            end
+
+            local numKey = tonumber(payload.source)
+            local strKey = tostring(payload.source)
+            if numKey then activeBackpackBonus[numKey] = 0 end
+            if strKey then activeBackpackBonus[strKey] = 0 end
+
+            TriggerClientEvent('generations_backpack:client:syncVisualBackpack', payload.source, false)
         end
     end
 
-    -- 2. Trigger ProcessBackpackUpdate when any item is swapped in/out of player's slot 6
-    if (payload.fromInventory == payload.source and fromSlotId == 6) or
-       (payload.toInventory == payload.source and toSlotId == 6) then
+    -- 2. Trigger ProcessBackpackUpdate when a backpack is swapped into slot 25
+    if payload.toInventory == payload.source and toSlotId == 25 then
         CreateThread(function()
-            Wait(250) -- Wait briefly for the inventory state to be updated
+            Wait(250) -- Wait briefly for the inventory state to update
             ProcessBackpackUpdate(payload.source)
         end)
     end
