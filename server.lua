@@ -1,5 +1,6 @@
 local BACKPACK_DEFAULTS = { slots = 10, weight = 15000, maleDrawable = 31, maleTexture = 0, femaleDrawable = 31, femaleTexture = 0 }
 local activeBackpackBonus = {}
+local activePlayerBackpacks = {} -- Key: player source (number), Value: { backpackId = string, itemName = string }
 
 -- Export to get backpack bonus (weight in grams)
 local function GetBackpackBonus(source)
@@ -35,6 +36,28 @@ local function GetBackpackMetadata(itemName)
 end
 exports('GetBackpackMetadata', GetBackpackMetadata)
 
+-- Helper function to migrate player expanded slots to a backpack stash
+local function MigratePlayerSlotsToStash(source, backpackId, itemName)
+    local bpConfig = Config.Backpacks[itemName]
+    if not bpConfig then return end
+
+    local extraSlots = tonumber(bpConfig.slots) or 10
+    local extraWeight = tonumber(bpConfig.weight) or 15000
+
+    -- Register stash to ensure it exists in ox_inventory
+    exports.ox_inventory:RegisterStash(backpackId, bpConfig.label, extraSlots, extraWeight, false)
+
+    -- Loop through the player's expanded slots and move items to the stash
+    for i = 1, extraSlots do
+        local playerSlotId = 25 + i
+        local slotData = exports.ox_inventory:GetSlot(source, playerSlotId)
+        if slotData and slotData.count > 0 then
+            exports.ox_inventory:AddItem(backpackId, slotData.name, slotData.count, slotData.metadata, i)
+            exports.ox_inventory:RemoveItem(source, slotData.name, slotData.count, nil, playerSlotId)
+        end
+    end
+end
+
 -- Core logic to update slot count and maximum weight, and migrate stash items to player slots
 local function ProcessBackpackUpdate(source)
     local defaultSlots = GetConvarInt('inventory:slots', 25)
@@ -42,6 +65,7 @@ local function ProcessBackpackUpdate(source)
 
     local item = exports.ox_inventory:GetSlot(source, 25)
     local bpConfig = item and Config.Backpacks[item.name]
+    local numKey = tonumber(source)
 
     print(string.format("^3[generations_backpack] ProcessBackpackUpdate for player %s. Item in Slot 25: %s (isBackpack: %s)^7", tostring(source), item and item.name or "none", tostring(bpConfig ~= nil)))
 
@@ -64,7 +88,15 @@ local function ProcessBackpackUpdate(source)
         local extraWeight = tonumber(bpConfig.weight) or BACKPACK_DEFAULTS.weight
         local component = tonumber(bpConfig.component) or 5
 
-        local numKey = tonumber(source)
+        -- If player had a DIFFERENT backpack active previously, migrate its slots to stash first
+        local lastActive = activePlayerBackpacks[numKey]
+        if lastActive and lastActive.backpackId ~= backpackId then
+            MigratePlayerSlotsToStash(source, lastActive.backpackId, lastActive.itemName)
+        end
+
+        -- Update active tracker
+        activePlayerBackpacks[numKey] = { backpackId = backpackId, itemName = item.name }
+
         local strKey = tostring(source)
         if numKey then activeBackpackBonus[numKey] = extraWeight end
         if strKey then activeBackpackBonus[strKey] = extraWeight end
@@ -108,7 +140,14 @@ local function ProcessBackpackUpdate(source)
             femaleTexture = femaleTexture
         })
     else
-        local numKey = tonumber(source)
+        -- Backpack was removed (either through normal swap or unexpected deletion/Clear/RemoveItem/death)
+        local lastActive = activePlayerBackpacks[numKey]
+        if lastActive then
+            -- Migrate current player slots 26+ back to stash to ensure item safety
+            MigratePlayerSlotsToStash(source, lastActive.backpackId, lastActive.itemName)
+            activePlayerBackpacks[numKey] = nil
+        end
+
         local strKey = tostring(source)
         if numKey then activeBackpackBonus[numKey] = 0 end
         if strKey then activeBackpackBonus[strKey] = 0 end
@@ -164,21 +203,11 @@ exports.ox_inventory:registerHook('swapItems', function(payload)
             
             -- Migrate items from player slots 26+ to stash slots 1+
             if backpackId then
-                local extraSlots = tonumber(bpConfig.slots) or 10
-                local extraWeight = tonumber(bpConfig.weight) or 15000
-
-                -- Register stash to ensure it exists in ox_inventory
-                exports.ox_inventory:RegisterStash(backpackId, bpConfig.label, extraSlots, extraWeight, false)
-
-                -- Loop through the player's expanded slots and move items to the stash
-                for i = 1, extraSlots do
-                    local playerSlotId = 25 + i
-                    local slotData = exports.ox_inventory:GetSlot(payload.source, playerSlotId)
-                    if slotData and slotData.count > 0 then
-                        exports.ox_inventory:AddItem(backpackId, slotData.name, slotData.count, slotData.metadata, i)
-                        exports.ox_inventory:RemoveItem(payload.source, slotData.name, slotData.count, nil, playerSlotId)
-                    end
-                end
+                MigratePlayerSlotsToStash(payload.source, backpackId, payload.fromSlot.name)
+                
+                -- Clear tracker for this player since they successfully unequipped it
+                local numKey = tonumber(payload.source)
+                if numKey then activePlayerBackpacks[numKey] = nil end
             end
 
             -- Set player slot count and weight limits back to default
@@ -205,5 +234,14 @@ exports.ox_inventory:registerHook('swapItems', function(payload)
             Wait(250) -- Wait briefly for the inventory state to update
             ProcessBackpackUpdate(payload.source)
         end)
+    end
+end)
+
+-- Clean active tracker when player drops out to prevent memory leaks
+AddEventHandler('playerDropped', function()
+    local src = source
+    local numKey = tonumber(src)
+    if numKey then
+        activePlayerBackpacks[numKey] = nil
     end
 end)
