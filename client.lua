@@ -73,16 +73,16 @@ RegisterNetEvent('generations_backpack:client:syncVisualBackpack', function(equi
         local model = GetEntityModel(ped)
         local isMale = (model == `mp_m_freemode_01`)
 
-        local drawable, texture
+        local component, drawable, texture
         if isMale then
+            component = tonumber(visualData.maleComponent) or tonumber(visualData.component) or 5
             drawable = visualData.maleDrawable
             texture = visualData.maleTexture
         else
+            component = tonumber(visualData.femaleComponent) or tonumber(visualData.component) or 5
             drawable = visualData.femaleDrawable
             texture = visualData.femaleTexture
         end
-
-        local component = tonumber(visualData.component) or 5
         applyVisualBackpack(component, drawable, texture)
     else
         removeVisualBackpack()

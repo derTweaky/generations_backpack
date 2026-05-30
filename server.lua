@@ -18,11 +18,13 @@ local function GetBackpackMetadata(itemName)
     return {
         isBackpack = true,
         label = bpConfig.label,
-        component = tonumber(bpConfig.component) or 5,
+        component = bpConfig.male and tonumber(bpConfig.male.component) or 5,
         slots = tonumber(bpConfig.slots) or 10,
         weight = tonumber(bpConfig.weight) or 15000,
+        maleComponent = bpConfig.male and tonumber(bpConfig.male.component) or 5,
         maleDrawable = bpConfig.male and tonumber(bpConfig.male.drawable) or 31,
         maleTexture = bpConfig.male and tonumber(bpConfig.male.texture) or 0,
+        femaleComponent = bpConfig.female and tonumber(bpConfig.female.component) or 5,
         femaleDrawable = bpConfig.female and tonumber(bpConfig.female.drawable) or 31,
         femaleTexture = bpConfig.female and tonumber(bpConfig.female.texture) or 0,
         drawable = bpConfig.male and tonumber(bpConfig.male.drawable) or 31,
@@ -85,7 +87,6 @@ local function ProcessBackpackUpdate(source)
 
         local extraSlots = tonumber(bpConfig.slots) or BACKPACK_DEFAULTS.slots
         local extraWeight = tonumber(bpConfig.weight) or BACKPACK_DEFAULTS.weight
-        local component = tonumber(bpConfig.component) or 5
 
         -- Check if player had a DIFFERENT backpack active previously, migrate its slots to stash first
         local lastActiveId = playerState.activeBackpackId
@@ -128,16 +129,19 @@ local function ProcessBackpackUpdate(source)
             end
         end
 
-        -- Retrieve drawable and texture details directly from Config.Backpacks
+        -- Retrieve drawable, texture and component details directly from Config.Backpacks
+        local maleComponent = bpConfig.male and tonumber(bpConfig.male.component) or 5
         local maleDrawable = bpConfig.male and tonumber(bpConfig.male.drawable) or BACKPACK_DEFAULTS.maleDrawable
         local maleTexture = bpConfig.male and tonumber(bpConfig.male.texture) or BACKPACK_DEFAULTS.maleTexture
+        local femaleComponent = bpConfig.female and tonumber(bpConfig.female.component) or 5
         local femaleDrawable = bpConfig.female and tonumber(bpConfig.female.drawable) or BACKPACK_DEFAULTS.femaleDrawable
         local femaleTexture = bpConfig.female and tonumber(bpConfig.female.texture) or BACKPACK_DEFAULTS.femaleTexture
 
         TriggerClientEvent('generations_backpack:client:syncVisualBackpack', source, true, {
-            component = component,
+            maleComponent = maleComponent,
             maleDrawable = maleDrawable,
             maleTexture = maleTexture,
+            femaleComponent = femaleComponent,
             femaleDrawable = femaleDrawable,
             femaleTexture = femaleTexture
         })
