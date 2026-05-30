@@ -245,3 +245,23 @@ AddEventHandler('playerDropped', function()
         activePlayerBackpacks[numKey] = nil
     end
 end)
+
+-- Initialize activePlayerBackpacks for already online players (e.g. on resource restart)
+CreateThread(function()
+    Wait(1500) -- Wait for ox_inventory to be fully ready
+    local players = GetPlayers()
+    for i = 1, #players do
+        local playerId = tonumber(players[i])
+        if playerId then
+            local item = exports.ox_inventory:GetSlot(playerId, 25)
+            local bpConfig = item and Config.Backpacks[item.name]
+            if bpConfig and item.metadata and item.metadata.backpackId then
+                activePlayerBackpacks[playerId] = {
+                    backpackId = item.metadata.backpackId,
+                    itemName = item.name
+                }
+                print(string.format("^2[generations_backpack] Startup: Restored active backpack tracker for player %d (%s)^7", playerId, item.metadata.backpackId))
+            end
+        end
+    end
+end)
