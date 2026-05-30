@@ -1,6 +1,5 @@
 local BACKPACK_DEFAULTS = { slots = 10, weight = 15000, maleDrawable = 31, maleTexture = 0, femaleDrawable = 31, femaleTexture = 0 }
 local activeBackpackBonus = {}
-local activePlayerBackpacks = {} -- Key: player source (number), Value: { backpackId = string, itemName = string }
 
 -- Export to get backpack bonus (weight in grams)
 local function GetBackpackBonus(source)
@@ -65,7 +64,7 @@ local function ProcessBackpackUpdate(source)
 
     local item = exports.ox_inventory:GetSlot(source, 25)
     local bpConfig = item and Config.Backpacks[item.name]
-    local numKey = tonumber(source)
+    local playerState = Player(source).state
 
     print(string.format("^3[generations_backpack] ProcessBackpackUpdate for player %s. Item in Slot 25: %s (isBackpack: %s)^7", tostring(source), item and item.name or "none", tostring(bpConfig ~= nil)))
 
@@ -88,15 +87,18 @@ local function ProcessBackpackUpdate(source)
         local extraWeight = tonumber(bpConfig.weight) or BACKPACK_DEFAULTS.weight
         local component = tonumber(bpConfig.component) or 5
 
-        -- If player had a DIFFERENT backpack active previously, migrate its slots to stash first
-        local lastActive = activePlayerBackpacks[numKey]
-        if lastActive and lastActive.backpackId ~= backpackId then
-            MigratePlayerSlotsToStash(source, lastActive.backpackId, lastActive.itemName)
+        -- Check if player had a DIFFERENT backpack active previously, migrate its slots to stash first
+        local lastActiveId = playerState.activeBackpackId
+        local lastActiveName = playerState.activeBackpackName
+        if lastActiveId and lastActiveId ~= backpackId and lastActiveName then
+            MigratePlayerSlotsToStash(source, lastActiveId, lastActiveName)
         end
 
-        -- Update active tracker
-        activePlayerBackpacks[numKey] = { backpackId = backpackId, itemName = item.name }
+        -- Update active tracker in server-only state bags (replicated = false)
+        playerState:set('activeBackpackId', backpackId, false)
+        playerState:set('activeBackpackName', item.name, false)
 
+        local numKey = tonumber(source)
         local strKey = tostring(source)
         if numKey then activeBackpackBonus[numKey] = extraWeight end
         if strKey then activeBackpackBonus[strKey] = extraWeight end
@@ -141,13 +143,16 @@ local function ProcessBackpackUpdate(source)
         })
     else
         -- Backpack was removed (either through normal swap or unexpected deletion/Clear/RemoveItem/death)
-        local lastActive = activePlayerBackpacks[numKey]
-        if lastActive then
+        local lastActiveId = playerState.activeBackpackId
+        local lastActiveName = playerState.activeBackpackName
+        if lastActiveId and lastActiveName then
             -- Migrate current player slots 26+ back to stash to ensure item safety
-            MigratePlayerSlotsToStash(source, lastActive.backpackId, lastActive.itemName)
-            activePlayerBackpacks[numKey] = nil
+            MigratePlayerSlotsToStash(source, lastActiveId, lastActiveName)
+            playerState:set('activeBackpackId', nil, false)
+            playerState:set('activeBackpackName', nil, false)
         end
 
+        local numKey = tonumber(source)
         local strKey = tostring(source)
         if numKey then activeBackpackBonus[numKey] = 0 end
         if strKey then activeBackpackBonus[strKey] = 0 end
@@ -172,6 +177,7 @@ end)
 exports.ox_inventory:registerHook('swapItems', function(payload)
     local fromSlotId = payload.fromSlot and payload.fromSlot.slot
     local toSlotId = type(payload.toSlot) == 'table' and payload.toSlot.slot or payload.toSlot
+    local playerState = Player(payload.source).state
 
     -- 0. Prevent nesting backpacks (blocking placing a backpack_* item inside another backpack stash or player slots > 25)
     if payload.fromSlot and payload.fromSlot.name and payload.fromSlot.name:sub(1, 9) == "backpack_" then
@@ -205,9 +211,9 @@ exports.ox_inventory:registerHook('swapItems', function(payload)
             if backpackId then
                 MigratePlayerSlotsToStash(payload.source, backpackId, payload.fromSlot.name)
                 
-                -- Clear tracker for this player since they successfully unequipped it
-                local numKey = tonumber(payload.source)
-                if numKey then activePlayerBackpacks[numKey] = nil end
+                -- Clear tracker state bag since they successfully unequipped it
+                playerState:set('activeBackpackId', nil, false)
+                playerState:set('activeBackpackName', nil, false)
             end
 
             -- Set player slot count and weight limits back to default
@@ -234,34 +240,5 @@ exports.ox_inventory:registerHook('swapItems', function(payload)
             Wait(250) -- Wait briefly for the inventory state to update
             ProcessBackpackUpdate(payload.source)
         end)
-    end
-end)
-
--- Clean active tracker when player drops out to prevent memory leaks
-AddEventHandler('playerDropped', function()
-    local src = source
-    local numKey = tonumber(src)
-    if numKey then
-        activePlayerBackpacks[numKey] = nil
-    end
-end)
-
--- Initialize activePlayerBackpacks for already online players (e.g. on resource restart)
-CreateThread(function()
-    Wait(1500) -- Wait for ox_inventory to be fully ready
-    local players = GetPlayers()
-    for i = 1, #players do
-        local playerId = tonumber(players[i])
-        if playerId then
-            local item = exports.ox_inventory:GetSlot(playerId, 25)
-            local bpConfig = item and Config.Backpacks[item.name]
-            if bpConfig and item.metadata and item.metadata.backpackId then
-                activePlayerBackpacks[playerId] = {
-                    backpackId = item.metadata.backpackId,
-                    itemName = item.name
-                }
-                print(string.format("^2[generations_backpack] Startup: Restored active backpack tracker for player %d (%s)^7", playerId, item.metadata.backpackId))
-            end
-        end
     end
 end)
