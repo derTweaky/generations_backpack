@@ -1,5 +1,6 @@
 local BACKPACK_DEFAULTS = { slots = 10, weight = 15000, maleDrawable = 31, maleTexture = 0, femaleDrawable = 31, femaleTexture = 0 }
 local activeBackpackBonus = {}
+local processingPlayers = {} -- Re-entrancy locks to prevent recursive inventory updates from causing duplication
 
 -- Export to get backpack bonus (weight in grams)
 local function GetBackpackBonus(source)
@@ -18,9 +19,9 @@ local function GetBackpackMetadata(itemName)
     return {
         isBackpack = true,
         label = bpConfig.label,
-        component = bpConfig.male and tonumber(bpConfig.male.component) or 5,
         slots = tonumber(bpConfig.slots) or 10,
         weight = tonumber(bpConfig.weight) or 15000,
+        component = bpConfig.male and tonumber(bpConfig.male.component) or 5,
         maleComponent = bpConfig.male and tonumber(bpConfig.male.component) or 5,
         maleDrawable = bpConfig.male and tonumber(bpConfig.male.drawable) or 31,
         maleTexture = bpConfig.male and tonumber(bpConfig.male.texture) or 0,
@@ -60,7 +61,7 @@ local function MigratePlayerSlotsToStash(source, backpackId, itemName)
 end
 
 -- Core logic to update slot count and maximum weight, and migrate stash items to player slots
-local function ProcessBackpackUpdate(source)
+local function ProcessBackpackUpdateInternal(source)
     local defaultSlots = GetConvarInt('inventory:slots', 25)
     local defaultWeight = GetConvarInt('inventory:weight', 30000)
 
@@ -171,6 +172,21 @@ local function ProcessBackpackUpdate(source)
     end
 end
 
+-- Re-entrancy protected update wrapper
+local function ProcessBackpackUpdate(source)
+    local numKey = tonumber(source)
+    if not numKey then return end
+    if processingPlayers[numKey] then return end
+    processingPlayers[numKey] = true
+
+    local success, err = pcall(ProcessBackpackUpdateInternal, numKey)
+    if not success then
+        print("^1[generations_backpack] Error in ProcessBackpackUpdate: " .. tostring(err) .. "^7")
+    end
+
+    processingPlayers[numKey] = nil
+end
+
 -- Hook when player inventory is requested to update
 RegisterNetEvent('generations_backpack:server:updateBackpack', function()
     local src = source
@@ -182,6 +198,7 @@ exports.ox_inventory:registerHook('swapItems', function(payload)
     local fromSlotId = payload.fromSlot and payload.fromSlot.slot
     local toSlotId = type(payload.toSlot) == 'table' and payload.toSlot.slot or payload.toSlot
     local playerState = Player(payload.source).state
+    local numKey = tonumber(payload.source)
 
     -- 0. Prevent nesting backpacks (blocking placing a backpack_* item inside another backpack stash or player slots > 25)
     if payload.fromSlot and payload.fromSlot.name and payload.fromSlot.name:sub(1, 9) == "backpack_" then
@@ -213,11 +230,19 @@ exports.ox_inventory:registerHook('swapItems', function(payload)
             
             -- Migrate items from player slots 26+ to stash slots 1+
             if backpackId then
-                MigratePlayerSlotsToStash(payload.source, backpackId, payload.fromSlot.name)
+                if numKey then processingPlayers[numKey] = true end
                 
-                -- Clear tracker state bag since they successfully unequipped it
+                local success, err = pcall(function()
+                    MigratePlayerSlotsToStash(payload.source, backpackId, payload.fromSlot.name)
+                end)
+                if not success then
+                    print("^1[generations_backpack] Error during stash migration: " .. tostring(err) .. "^7")
+                end
+
                 playerState:set('activeBackpackId', nil, false)
                 playerState:set('activeBackpackName', nil, false)
+                
+                if numKey then processingPlayers[numKey] = nil end
             end
 
             -- Set player slot count and weight limits back to default
@@ -229,7 +254,6 @@ exports.ox_inventory:registerHook('swapItems', function(payload)
                 exports.ox_inventory:SetMaxWeight(payload.source, defaultWeight)
             end
 
-            local numKey = tonumber(payload.source)
             local strKey = tostring(payload.source)
             if numKey then activeBackpackBonus[numKey] = 0 end
             if strKey then activeBackpackBonus[strKey] = 0 end
