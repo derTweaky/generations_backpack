@@ -134,6 +134,27 @@ exports.ox_inventory:registerHook('swapItems', function(payload)
     local fromSlotId = payload.fromSlot and payload.fromSlot.slot
     local toSlotId = type(payload.toSlot) == 'table' and payload.toSlot.slot or payload.toSlot
 
+    -- 0. Prevent nesting backpacks (blocking placing a backpack_* item inside another backpack stash or player slots > 25)
+    if payload.fromSlot and payload.fromSlot.name and payload.fromSlot.name:sub(1, 9) == "backpack_" then
+        -- Check if target is a backpack stash
+        if type(payload.toInventory) == 'string' and payload.toInventory:sub(1, 3) == "bp_" then
+            TriggerClientEvent('ox_lib:notify', payload.source, {
+                type = 'error',
+                description = 'Du kannst keinen Rucksack in einen anderen Rucksack legen!'
+            })
+            return false
+        end
+
+        -- Check if target is player expanded slots (> 25)
+        if payload.toInventory == payload.source and type(toSlotId) == 'number' and toSlotId > 25 then
+            TriggerClientEvent('ox_lib:notify', payload.source, {
+                type = 'error',
+                description = 'Du kannst keinen Rucksack in die Rucksackspeicher-Slots legen!'
+            })
+            return false
+        end
+    end
+
     -- 1. Unequipping a backpack from slot 25
     if payload.fromInventory == payload.source and fromSlotId == 25 then
         local bpConfig = Config.Backpacks[payload.fromSlot.name]
